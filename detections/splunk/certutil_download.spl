@@ -1,0 +1,30 @@
+/*
+ * Detection / hunt: LOLBIN download via certutil.exe
+ * TryHackMe "Benign" — user haroon retrieved benign.exe from controlc.com
+ *
+ * Alerting variant: schedule every 15 minutes, trigger if results > 0.
+ * Adjust the index/sourcetype to match your deployment.
+ */
+
+index=win_eventlogs source="*Security*" EventID=4688
+    ProcessName="*certutil.exe"
+    CommandLine="*-urlcache*"
+    CommandLine="*http*"
+| eval risk = case(
+        match(lower(CommandLine), "(controlc\.com|pastebin\.com|paste\.ee|transfer\.sh|gofile\.io|anonfiles\.com|discord\.com/api/webhooks)"), "high",
+        match(CommandLine, "-f\s+-"), "medium",
+        1=1, "low")
+| table _time host UserName ParentProcessName ProcessName CommandLine risk
+| sort - _time
+
+/* ---------------------------------------------------------------------------
+ * Quick triage query: every certutil invocation in the data, ranked by how
+ * unusual the command line is. Useful before turning a hunt into a rule.
+ * ------------------------------------------------------------------------- */
+
+index=win_eventlogs ProcessName="*certutil.exe"
+| stats count AS executions
+        values(CommandLine) AS command_lines
+        values(UserName) AS users
+    BY host
+| sort +executions

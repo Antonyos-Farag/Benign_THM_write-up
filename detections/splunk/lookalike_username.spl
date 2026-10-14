@@ -1,0 +1,50 @@
+/*
+ * Detection / hunt: look-alike (typo-squat / homoglyph) account names
+ * TryHackMe "Benign" — "Amel1a" masquerades as the legitimate user "Amelia"
+ * (the digit 1 replaces the letter i)
+ *
+ * Approach: compare the observed account list against a maintained baseline and
+ * flag near-matches that use digit/letter substitutions.
+ */
+
+/* 1) Enumerate every account observed in the window with a light name-normaliser */
+index=win_eventlogs EventID=4688
+| stats count AS events values(host) AS hosts BY UserName
+| eval normalised = lower(UserName)
+| eval normalised = replace(normalised, "0", "o")
+| eval normalised = replace(normalised, "1", "i")
+| eval normalised = replace(normalised, "3", "e")
+| eval normalised = replace(normalised, "4", "a")
+| eval normalised = replace(normalised, "5", "s")
+| eval normalised = replace(normalised, "7", "t")
+| eval normalised = replace(normalised, "$", "s")
+| table UserName normalised events hosts
+| sort +normalised
+
+/* ---------------------------------------------------------------------------
+ * 2) Flag account names that normalise to the SAME name as another account.
+ *    That pair is the imposter signature: `Amel1a` and `Amelia` both -> `amelia`.
+ * ------------------------------------------------------------------------- */
+
+index=win_eventlogs EventID=4688
+| stats count AS events values(host) AS hosts BY UserName
+| eval normalised = lower(UserName)
+| eval normalised = replace(normalised, "0", "o")
+| eval normalised = replace(normalised, "1", "i")
+| eval normalised = replace(normalised, "3", "e")
+| eval normalised = replace(normalised, "4", "a")
+| eval normalised = replace(normalised, "5", "s")
+| eval normalised = replace(normalised, "7", "t")
+| eventstats dc(UserName) AS variants BY normalised
+| where variants > 1
+| stats values(UserName) AS accounts sum(events) AS total_events values(hosts) AS hosts BY normalised
+| table normalised accounts total_events hosts
+
+/* ---------------------------------------------------------------------------
+ * 3) Pivot: what did the flagged accounts actually do?
+ *    Replace <suspect> with the account name you want to profile.
+ * ------------------------------------------------------------------------- */
+
+index=win_eventlogs UserName="Amel1a"
+| table _time host UserName ParentProcessName ProcessName CommandLine
+| sort +_time

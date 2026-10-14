@@ -1,0 +1,30 @@
+/*
+ * Detection / hunt: scheduled task pointing at a temp / user-writable path
+ * TryHackMe "Benign" — Chris.fort created a task running update.exe from \Temp\
+ *
+ * Alerting variant: schedule every 15 minutes, trigger if results > 0.
+ */
+
+index=win_eventlogs EventID=4688
+    ProcessName="*schtasks.exe"
+    CommandLine="*/create*"
+    (CommandLine="*\\Temp\\*" OR
+     CommandLine="*\\AppData\\*" OR
+     CommandLine="*\\ProgramData\\*" OR
+     CommandLine="*Users\\Public*" OR
+     CommandLine="*\\Downloads\\*")
+| eval suspicious_ext = if(match(lower(CommandLine), "\.(exe|dll|ps1|bat|cmd|vbs|js)\b"), "yes", "no")
+| where suspicious_ext="yes"
+| table _time host UserName ParentProcessName CommandLine suspicious_ext
+| sort - _time
+
+/* ---------------------------------------------------------------------------
+ * Variant: the same hunt expressed through the vendor event for task creation
+ * (Security 4698) when that telemetry is available.
+ * ------------------------------------------------------------------------- */
+
+index=win_eventlogs EventID=4698
+| rex field=_raw "TaskName:\s*(?<task_name>[^\r\n]+)"
+| rex field=_raw "Task Content:\s*(?<task_content>[^\r\n]+)"
+| where match(task_content, "(?i)(\\Temp\\|\\AppData\\|Users\\Public|\\Downloads\\)")
+| table _time host task_name task_content
