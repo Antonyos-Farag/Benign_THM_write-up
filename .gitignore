@@ -1,0 +1,18 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# Screenshots and scratch exports (keep the repo lean; link or compress images
+# you actually want to publish)
+*.tmp
+screenshots-scratch/
+
+# Never commit artefacts captured from a live lab
+*.pcap
+*.pcapng
+*.evtx
+*.zip
+*.dmp

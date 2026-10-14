@@ -1,0 +1,67 @@
+title: Scheduled Task Created Executing Binary From Temp Or User-Writable Path
+id: 1a6d4e02-93c1-4f8a-b5d2-7e4b6c9a0f31
+status: experimental
+description: >
+  Detects schtasks.exe creating a scheduled task whose action points at a binary
+  in a temp or user-writable directory. Modelled on the TryHackMe "Benign" room,
+  where a task ran update.exe from \Temp\ at startup, masquerading as an
+  "Office update".
+references:
+  - https://tryhackme.com/room/benign
+  - https://attack.mitre.org/techniques/T1053/005/
+author: Benign THM write-up (illustrative, lab-only)
+date: 2022/03/04
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1053.005
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+    - Image|endswith: '\schtasks.exe'
+    - OriginalFileName: 'schtasks.exe'
+  selection_create:
+    CommandLine|contains: '/create'
+  selection_susp_path:
+    CommandLine|contains:
+      - '\Temp\'
+      - '\tmp\'
+      - '\AppData\'
+      - '\ProgramData\'
+      - 'Users\Public\'
+      - '\Downloads\'
+      - '\Windows\Tasks\'
+  selection_susp_ext:
+    CommandLine|contains:
+      - '.exe'
+      - '.dll'
+      - '.ps1'
+      - '.bat'
+      - '.cmd'
+      - '.vbs'
+      - '.js'
+  condition: selection_img and selection_create and selection_susp_path and selection_susp_ext
+fields:
+  - CommandLine
+  - ParentImage
+  - ParentCommandLine
+  - User
+falsepositives:
+  - Software deployment / updater frameworks that legitimately stage and run
+    scheduled tasks from user-writable directories
+  - Legitimate "Office update" style tasks created by management tooling
+level: high
+
+# Notes
+#
+# * The room's observed task ran `update.exe` from a `\Temp\` directory at
+#   startup.
+# * This rule pairs well with parent-process context: `schtasks.exe` spawned by
+#   `cmd.exe`, `powershell.exe` or an office application is far more suspicious
+#   than one spawned by a signed deployment agent.
+# * If your environment produces too much noise from legitimate updaters, whitelist
+#   the exact task names/paths those agents use rather than removing the rule.
+# * Where available, correlate with the Security event **4698** (a scheduled task
+#   was created) for the canonical artefact.
